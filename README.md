@@ -1,10 +1,24 @@
 <a href="https://openfreemap.org/"><img src="https://openfreemap.org/logo.jpg" alt="logo" height="200" class="logo" /></a>
 
-# OpenFreeMap
+# OpenFreeMap - Docker & Kubernetes Implementation
+
+> **🐳 This is a community-maintained Docker/Kubernetes implementation of OpenFreeMap.**  
+> For the official project (Docker-free by design), visit [hyperknot/openfreemap](https://github.com/hyperknot/openfreemap).
+
+## Quick Start
+
+- **[Docker Quick Start](docker/README.md)** - Get started with Docker Compose or Kubernetes
+- **[Production Deployment](docker/DEPLOY.md)** - Production setup, scaling, monitoring
+
+---
+
+## About OpenFreeMap
 
 OpenFreeMap lets you display custom maps on your website and apps for free.
 
-You can either [self-host](docs/self_hosting.md) or use our public instance. Everything is **open-source**, including the full production setup — there’s no 'open-core' model here. The map data comes from OpenStreetMap.
+You can either self-host or use the public instance. Everything is **open-source**, including the full production setup. The map data comes from OpenStreetMap.
+
+**This fork provides containerized deployment for Docker and Kubernetes.** The original OpenFreeMap is designed for bare metal/VM deployment. This implementation extracts tiles to a regular filesystem for container-native hosting.
 
 Using our **public instance** is completely free: there are no limits on the number of map views or requests. There’s no registration, no user database, no API keys, and no cookies. We aim to cover the running costs of our public instance through donations.
 
