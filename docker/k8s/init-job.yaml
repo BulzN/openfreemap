@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openfreemap-init
+  namespace: openfreemap
+  labels:
+    app: openfreemap
+    component: init
+spec:
+  # Only run once successfully
+  completions: 1
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: openfreemap
+        component: init
+    spec:
+      restartPolicy: OnFailure
+      
+      # Required for loop mounting Btrfs images
+      securityContext:
+        privileged: true
+      
+      containers:
+      - name: init
+        image: openfreemap-init:latest
+        imagePullPolicy: IfNotPresent
+        
+        envFrom:
+        - configMapRef:
+            name: openfreemap-config
+        
+        env:
+        - name: SKIP_DOWNLOAD
+          value: "false"
+        - name: SKIP_EXTRACT
+          value: "false"
+        - name: SKIP_ASSETS
+          value: "false"
+        
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: openfreemap-data
+

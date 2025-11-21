@@ -1,0 +1,63 @@
+---
+
+services:
+  # Init container - runs once to download and extract data
+  init:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.init
+    image: openfreemap-init:latest
+    container_name: ofm-init
+    privileged: true  # Required for loop mounting Btrfs images
+    environment:
+      # Area to download: 'planet' or 'monaco'
+      - AREA=${AREA:-monaco}
+      # Version: 'latest' or specific version string
+      - VERSION=${VERSION:-latest}
+      # Skip flags for faster iteration
+      - SKIP_DOWNLOAD=${SKIP_DOWNLOAD:-false}
+      - SKIP_EXTRACT=${SKIP_EXTRACT:-false}
+      - SKIP_ASSETS=${SKIP_ASSETS:-false}
+      # Directories
+      - BTRFS_DIR=/data/btrfs
+      - TILES_DIR=/data/tiles
+      - ASSETS_DIR=/data/assets
+    volumes:
+      - ofm-data:/data
+    restart: "no"
+  
+  # Nginx container - serves the tiles
+  nginx:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nginx
+    image: openfreemap-nginx:latest
+    container_name: ofm-nginx
+    depends_on:
+      - init
+    environment:
+      - NGINX_HOST=${NGINX_HOST:-localhost}
+      - TILES_DIR=/data/tiles
+      - ASSETS_DIR=/data/assets
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ofm-data:/data  # Read-write for config generation
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  # Shared volume for all data
+  # This volume persists across container restarts
+  ofm-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}
+

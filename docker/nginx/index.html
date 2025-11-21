@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>OpenFreeMap - Self-Hosted Tile Server</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css' rel='stylesheet' />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        #header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 5px 0;
+        }
+        
+        #header p {
+            font-size: 13px;
+            color: #666;
+            margin: 0;
+        }
+        
+        #header a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        #header a:hover {
+            text-decoration: underline;
+        }
+        
+        #map {
+            position: fixed;
+            top: 70px;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 280px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .info strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .info code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            display: block;
+            margin: 5px 0;
+            overflow-x: auto;
+        }
+        
+        .status {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00cc66;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .zoom-info {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            z-index: 1000;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 130px;
+            left: 20px;
+            z-index: 1000;
+        }
+        
+        .control-btn {
+            display: block;
+            width: 100%;
+            background: white;
+            border: none;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #f5f5f5;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1><span class="status"></span>OpenFreeMap Self-Hosted Tile Server</h1>
+        <p>
+            Serving tiles from: <code id="hostname"></code> •
+            <a href="/health" target="_blank">Health Check</a> •
+            <a href="https://openfreemap.org" target="_blank">Documentation</a>
+        </p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="zoom-info">
+        Zoom: <span id="zoom-level">--</span>
+    </div>
+    
+    <div class="controls">
+        <button class="control-btn" onclick="fitToBounds()">📍 Fit to Monaco</button>
+        <button class="control-btn" onclick="showBoundsBox()">🔲 Show Bounds</button>
+    </div>
+    
+    <div class="info">
+        <strong>🗺️ Tile Server Status: Running</strong>
+        <div>Available areas:</div>
+        <div id="areas">Loading...</div>
+        <div class="warning">
+            ⚠️ <strong>Monaco is tiny!</strong><br>
+            Zoom must be ≥11 to see it.<br>
+            Current max: zoom 14
+        </div>
+    </div>
+
+    <script>
+        const hostname = window.location.host;
+        document.getElementById('hostname').textContent = hostname;
+        
+        // Fetch available areas
+        fetch('/health')
+            .then(() => {
+                // For now, we'll discover areas dynamically
+                // In a real implementation, you'd list them from the tiles directory
+                const areas = ['monaco']; // Detected from your download
+                document.getElementById('areas').innerHTML = areas.map(a => 
+                    `<code>/${a}</code>`
+                ).join('');
+                
+                // Initialize map with first available area
+                if (areas.length > 0) {
+                    initMap(areas[0]);
+                }
+            })
+            .catch(() => {
+                document.getElementById('areas').innerHTML = '<span style="color: red;">Server error</span>';
+            });
+        
+        let map; // Global reference
+        let currentBounds = null;
+        let boundsBoxLayer = null;
+        
+        function initMap(area) {
+            // Fetch area metadata first
+            fetch(`/${area}`)
+                .then(r => r.json())
+                .then(tilejson => {
+                    const bounds = tilejson.bounds;
+                    currentBounds = [
+                        [bounds[0], bounds[1]], // Southwest
+                        [bounds[2], bounds[3]]  // Northeast
+                    ];
+                    
+                    // Fetch style from official OpenFreeMap but use local tiles
+                    return fetch('https://tiles.openfreemap.org/styles/liberty')
+                        .then(r => r.json())
+                        .then(style => {
+                            // Use the tile URL from TileJSON (includes version)
+                            const protocol = window.location.protocol;
+                            const tileUrlTemplate = tilejson.tiles[0];
+                            // Replace the domain with our local server
+                            const tileUrl = tileUrlTemplate.replace(/^https?:\/\/[^/]+/, `${protocol}//${hostname}`);
+                            
+                            console.log('Using tile URL:', tileUrl);
+                            style.sources.openmaptiles.tiles = [tileUrl];
+                            
+                            // Calculate center from bounds
+                            const centerLon = (bounds[0] + bounds[2]) / 2;
+                            const centerLat = (bounds[1] + bounds[3]) / 2;
+                            
+                            // Create map with bounds constraints
+                            map = new maplibregl.Map({
+                                container: 'map',
+                                style: style,
+                                center: [centerLon, centerLat],
+                                zoom: 13, // Start zoomed in to see Monaco
+                                minZoom: 0,
+                                maxZoom: 14,
+                                maxBounds: [
+                                    [bounds[0] - 1, bounds[1] - 1], // Extend bounds a bit
+                                    [bounds[2] + 1, bounds[3] + 1]
+                                ],
+                                attributionControl: true
+                            });
+                            
+                            map.addControl(new maplibregl.NavigationControl(), 'top-right');
+                            map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+                            
+                            // Update zoom level display
+                            function updateZoom() {
+                                const zoom = map.getZoom().toFixed(1);
+                                document.getElementById('zoom-level').textContent = zoom;
+                                
+                                // Warn if zoomed out too far
+                                if (zoom < 11) {
+                                    document.querySelector('.warning').style.borderColor = '#dc3545';
+                                    document.querySelector('.warning').style.background = '#f8d7da';
+                                } else {
+                                    document.querySelector('.warning').style.borderColor = '#ffc107';
+                                    document.querySelector('.warning').style.background = '#fff3cd';
+                                }
+                            }
+                            
+                            map.on('zoom', updateZoom);
+                            map.on('load', () => {
+                                console.log('Map loaded successfully');
+                                console.log('Tile URL template:', tileUrl);
+                                console.log('Area bounds:', bounds);
+                                updateZoom();
+                                
+                                // Add a marker at the center
+                                new maplibregl.Marker({color: '#dc3545'})
+                                    .setLngLat([centerLon, centerLat])
+                                    .setPopup(new maplibregl.Popup().setHTML('<strong>Monaco Center</strong>'))
+                                    .addTo(map);
+                            });
+                            
+                            map.on('error', (e) => {
+                                console.error('Map error:', e);
+                            });
+                        });
+                })
+                .catch(err => {
+                    console.error('Failed to load map:', err);
+                    document.querySelector('.info').innerHTML = 
+                        '<strong style="color: red;">❌ Failed to load map</strong>' +
+                        '<div>Check console for errors</div>';
+                });
+        }
+        
+        function fitToBounds() {
+            if (map && currentBounds) {
+                map.fitBounds(currentBounds, {
+                    padding: 50,
+                    maxZoom: 14
+                });
+            }
+        }
+        
+        function showBoundsBox() {
+            if (!map || !currentBounds) return;
+            
+            // Remove existing box if present
+            if (boundsBoxLayer) {
+                map.removeLayer('bounds-box');
+                map.removeSource('bounds-box');
+                boundsBoxLayer = null;
+                return;
+            }
+            
+            // Add bounds rectangle
+            const [[west, south], [east, north]] = currentBounds;
+            
+            map.addSource('bounds-box', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [[
+                            [west, south],
+                            [east, south],
+                            [east, north],
+                            [west, north],
+                            [west, south]
+                        ]]
+                    }
+                }
+            });
+            
+            map.addLayer({
+                id: 'bounds-box',
+                type: 'line',
+                source: 'bounds-box',
+                paint: {
+                    'line-color': '#dc3545',
+                    'line-width': 3,
+                    'line-dasharray': [2, 2]
+                }
+            });
+            
+            boundsBoxLayer = true;
+        }
+    </script>
+</body>
+</html>
+

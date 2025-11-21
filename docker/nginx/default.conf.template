@@ -1,0 +1,96 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    
+    server_name _;
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+    
+    # Serve test/demo viewer at root
+    location = / {
+        root /usr/share/nginx/html;
+        try_files /index.html =404;
+        add_header Cache-Control "no-cache";
+    }
+    
+    # Serve tiles
+    # These location blocks will be dynamically generated
+    # based on available tile versions
+    
+    # Include generated location blocks
+    include /etc/nginx/includes/tiles-*.conf;
+    
+    # Serve assets
+    location /fonts/ {
+        alias /data/assets/fonts/ofm/;
+        try_files $uri =404;
+        
+        expires 1w;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Cache-Control public;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+    
+    location /natural_earth/ {
+        alias /data/assets/natural_earth/ofm/;
+        try_files $uri =404;
+        
+        expires 10y;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Cache-Control public;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+    
+    location /sprites/ {
+        alias /data/assets/sprites/;
+        try_files $uri =404;
+        
+        expires 10y;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Cache-Control public;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+    
+    location /styles/ {
+        alias /data/assets/styles/ofm/;
+        try_files $uri.json =404;
+        
+        expires 1d;
+        default_type application/json;
+        
+        # Domain substitution happens in TileJSON generation
+        # sub_filter '__TILEJSON_DOMAIN__' 'localhost';
+        # sub_filter_once off;
+        # sub_filter_types '*';
+        
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Cache-Control public;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+    
+    # Empty tile handler - for missing tiles
+    location @empty_tile {
+        return 200 '';
+        expires 10y;
+        
+        types {
+            application/vnd.mapbox-vector-tile pbf;
+        }
+        
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Cache-Control public;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header x-ofm-debug 'empty tile';
+    }
+    
+    # Deny all other requests
+    location / {
+        deny all;
+    }
+}
+

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openfreemap-config
+  namespace: openfreemap
+  labels:
+    app: openfreemap
+data:
+  # Area to download: planet or monaco
+  AREA: "monaco"
+  
+  # Version to download: latest or specific version
+  VERSION: "latest"
+  
+  # Nginx host - change to your domain
+  NGINX_HOST: "localhost"
+  
+  # Directory paths
+  BTRFS_DIR: "/data/btrfs"
+  TILES_DIR: "/data/tiles"
+  ASSETS_DIR: "/data/assets"
+

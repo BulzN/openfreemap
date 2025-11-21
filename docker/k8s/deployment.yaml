@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openfreemap-nginx
+  namespace: openfreemap
+  labels:
+    app: openfreemap
+    component: nginx
+spec:
+  # Scale horizontally - multiple nginx pods serving from same volume
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: openfreemap
+      component: nginx
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  template:
+    metadata:
+      labels:
+        app: openfreemap
+        component: nginx
+    spec:
+      # Wait for init job to complete
+      initContainers:
+      - name: wait-for-init
+        image: busybox:latest
+        command: 
+        - sh
+        - -c
+        - |
+          echo "Waiting for initialization to complete..."
+          while [ ! -f /data/.init-complete ]; do
+            echo "Still waiting..."
+            sleep 10
+          done
+          echo "Initialization complete!"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          readOnly: true
+      
+      containers:
+      - name: nginx
+        image: openfreemap-nginx:latest
+        imagePullPolicy: IfNotPresent
+        
+        envFrom:
+        - configMapRef:
+            name: openfreemap-config
+        
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          readOnly: true
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "2000m"
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: openfreemap-data
+          readOnly: true
+

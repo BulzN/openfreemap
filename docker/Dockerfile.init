@@ -1,0 +1,43 @@
+# OpenFreeMap Init Container
+# Downloads Btrfs images, extracts tiles, and prepares assets
+# This container runs once to populate the shared volume
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    aria2 \
+    pigz \
+    btrfs-progs \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create working directory
+WORKDIR /app
+
+# Copy Python requirements and install dependencies
+COPY docker/requirements.txt /app/
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Copy initialization scripts
+COPY docker/scripts/init-download.py /app/
+COPY docker/scripts/extract-btrfs.py /app/
+COPY docker/scripts/download-assets.py /app/
+COPY modules/http_host/scripts/metadata_to_tilejson.py /app/scripts/
+
+# Create data directories
+RUN mkdir -p /data/btrfs /data/tiles /data/assets /data/config
+
+# Set entrypoint
+COPY docker/scripts/init-entrypoint.sh /app/
+RUN chmod +x /app/init-entrypoint.sh
+
+ENTRYPOINT ["/app/init-entrypoint.sh"]
+
